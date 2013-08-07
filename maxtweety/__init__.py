@@ -1,4 +1,5 @@
 from maxtweety.listener import StreamWatcherListener
+from maxtweety.utils import setup_logging
 
 import os
 import sys
@@ -11,20 +12,20 @@ import tweepy
 import logging
 
 # CONFIG
-max_server_url = 'https://max.upc.edu'
+# max_server_url = 'https://max.upc.edu'
 # max_server_url = 'https://sneridagh.upc.es'
 
-twitter_generator_name = 'Twitter'
-debug_hashtag = 'debugmaxupcnet'
-logging_file = '/var/pyramid/maxserver/var/log/twitter-listener.log'
-if not os.path.exists(logging_file):  # pragma: no cover
-    logging_file = '/tmp/twitter-listener.log'
-logger = logging.getLogger("tweeterlistener")
-fh = logging.FileHandler(logging_file, encoding="utf-8")
-formatter = logging.Formatter('%(asctime)s %(message)s')
-logger.setLevel(logging.DEBUG)
-fh.setFormatter(formatter)
-logger.addHandler(fh)
+# twitter_generator_name = 'Twitter'
+debug_hashtag = u'debugmaxupcnet'
+# logging_file = '/var/pyramid/maxserver/var/log/twitter-listener.log'
+# if not os.path.exists(logging_file):  # pragma: no cover
+#     logging_file = '/tmp/twitter-listener.log'
+logger = logging.getLogger(__name__)
+# fh = logging.FileHandler(logging_file, encoding="utf-8")
+# formatter = logging.Formatter('%(asctime)s %(message)s')
+# logger.setLevel(logging.DEBUG)
+# fh.setFormatter(formatter)
+# logger.addHandler(fh)
 
 
 def main(argv=sys.argv, quiet=False):  # pragma: no cover
@@ -35,7 +36,7 @@ def main(argv=sys.argv, quiet=False):  # pragma: no cover
 
 class MaxTwitterListenerRunner(object):  # pragma: no cover
     verbosity = 1  # required
-    description = "Max rules runner."
+    description = "Max Twitter listener runner."
     usage = "usage: %prog [options]"
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument('-c', '--config',
@@ -59,23 +60,36 @@ class MaxTwitterListenerRunner(object):  # pragma: no cover
             self.access_token = self.config.get('twitter', 'access_token')
             self.access_token_secret = self.config.get('twitter', 'access_token_secret')
 
-            self.maxservers_settings = [maxserver for maxserver in self.config.sections() if maxserver.startswith('max:')]
+            self.maxservers_settings = [maxserver for maxserver in self.config.sections() if maxserver.startswith('max_')]
 
         except:
             logging.error('You must provide a valid configuration .ini file.')
             sys.exit(1)
 
     def get_twitter_enabled_contexts(self):
-        contexts = []
+        contexts = {}
         for max_settings in self.maxservers_settings:
             max_url = self.config.get(max_settings, 'server')
             req = requests.get('{}/contexts'.format(max_url), headers=self.oauth2Header(self.restricted_username, self.restricted_token))
-            import ipdb;ipdb.set_trace()
+            context_follow_list = [users_to_follow.get('twitterUsernameId') for users_to_follow in req.json().get('items') if users_to_follow.get('twitterUsernameId')]
+            context_readable_follow_list = [users_to_follow.get('twitterUsername') for users_to_follow in req.json().get('items') if users_to_follow.get('twitterUsername')]
+            contexts.setdefault(max_settings, {})['ids'] = context_follow_list
+            contexts[max_settings]['readable'] = context_readable_follow_list
+
+        self.users_id_to_follow = contexts
+
+    def flatten_users_id_to_follow(self):
+        flat_list = []
+        for maxserver in self.users_id_to_follow.keys():
+            id_list = self.users_id_to_follow.get(maxserver).get('ids')
+            flat_list = flat_list + id_list
+
+        return flat_list
 
     def get_max_global_hashtags(self):
-        self.hashtags = []
+        self.global_hashtags = []
         for max_settings in self.maxservers_settings:
-            self.hashtags.append(self.config.get(max_settings, 'hashtag'))
+            self.global_hashtags.append(self.config.get(max_settings, 'hashtag'))
 
     def load_settings(self):
         settings_file = '{}/.max_restricted'.format(self.config.get('general', 'config_directory'))
@@ -98,28 +112,25 @@ class MaxTwitterListenerRunner(object):  # pragma: no cover
             "X-Oauth-Scope": scope}
 
     def run(self):
+        setup_logging(self.options.configfile)
         self.load_settings()
         self.get_max_global_hashtags()
         self.get_twitter_enabled_contexts()
-        contexts_with_twitter_username = db.contexts.find({"twitterUsernameId": {"$exists": True}})
-        follow_list = [users_to_follow.get('twitterUsernameId') for users_to_follow in contexts_with_twitter_username]
-        contexts_with_twitter_username.rewind()
-        readable_follow_list = [users_to_follow.get('twitterUsername') for users_to_follow in contexts_with_twitter_username]
 
         # Prompt for login credentials and setup stream object
         auth = tweepy.OAuthHandler(self.consumer_key, self.consumer_secret)
         auth.set_access_token(self.access_token, self.access_token_secret)
 
         # auth = tweepy.auth.BasicAuthHandler(self.options.username, self.options.password)
-        stream = tweepy.Stream(auth, StreamWatcherListener(), timeout=None)
+        stream = tweepy.Stream(auth, StreamWatcherListener(self.config.get('rabbitmq', 'server')), timeout=None)
 
-        # Hardcoded global hashtag(s)
-        track_list = ['#upc', '#%s' % debug_hashtag]
+        # Add the debug hashtag
+        self.global_hashtags.append(debug_hashtag)
 
-        logging.warning("Listening to this Twitter hashtags: %s" % str(track_list))
-        logging.warning("Listening to this Twitter userIds: %s" % str(readable_follow_list))
+        logging.warning("Listening to this Twitter hashtags: \n{}".format(json.dumps(self.global_hashtags, indent=4, sort_keys=True)))
+        logging.warning("Listening to this Twitter userIds: \n{}".format(json.dumps(self.users_id_to_follow, indent=4, sort_keys=True)))
 
-        stream.filter(follow=follow_list, track=track_list)
+        stream.filter(follow=self.flatten_users_id_to_follow(), track=self.global_hashtags)
 
 
 # For testing purposes only

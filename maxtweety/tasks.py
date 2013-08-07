@@ -1,8 +1,7 @@
 import os
-from celery.task import task
 from maxrules.twitter import twitter_generator_name, debug_hashtag, max_server_url
 import requests
-import pymongo
+
 from maxrules.config import mongodb_url, mongodb_db_name, mongodb_cluster, mongodb_hosts, mongodb_replica_set
 from max.MADMax import MADMaxCollection
 from max.rest.utils import canWriteInContexts
@@ -11,21 +10,20 @@ import json
 import logging
 
 
-logging_file = '/var/pyramid/maxserver/var/log/twitter-processor.log'
+# logging_file = '/var/pyramid/maxserver/var/log/twitter-processor.log'
 
-# Temporary patch to avoid tests failure
-if not os.path.exists(logging_file):  # pragma: no cover
-    logging_file = '/tmp/twitter-processor.log'
-logger = logging.getLogger("tweetprocessor")
-fh = logging.FileHandler(logging_file, encoding="utf-8")
-formatter = logging.Formatter('%(asctime)s %(message)s')
-logger.setLevel(logging.DEBUG)
-fh.setFormatter(formatter)
-logger.addHandler(fh)
+# # Temporary patch to avoid tests failure
+# if not os.path.exists(logging_file):  # pragma: no cover
+#     logging_file = '/tmp/twitter-processor.log'
+logger = logging.getLogger(__name__)
+# fh = logging.FileHandler(logging_file, encoding="utf-8")
+# formatter = logging.Formatter('%(asctime)s %(message)s')
+# logger.setLevel(logging.DEBUG)
+# fh.setFormatter(formatter)
+# logger.addHandler(fh)
 
 
-@task
-def processTweet(twitter_username, content, tweetID='---'):
+def processTweet(self, twitter_username, content, tweetID='---'):
     """ Process inbound tweet
     """
     # Setup logging
