@@ -1,12 +1,11 @@
-#!/usr/bin/env python
-from maxtweety.tasks import StreamWatcherListener
+from maxtweety.listener import StreamWatcherListener
 
 import os
 import sys
 import argparse
 import ConfigParser
-
-import pymongo
+import json
+import requests
 import tweepy
 
 import logging
@@ -60,16 +59,48 @@ class MaxTwitterListenerRunner(object):  # pragma: no cover
             self.access_token = self.config.get('twitter', 'access_token')
             self.access_token_secret = self.config.get('twitter', 'access_token_secret')
 
+            self.maxservers_settings = [maxserver for maxserver in self.config.sections() if maxserver.startswith('max:')]
+
         except:
             logging.error('You must provide a valid configuration .ini file.')
             sys.exit(1)
 
     def get_twitter_enabled_contexts(self):
-        req = requests.get('{}/contexts'.format())
+        contexts = []
+        for max_settings in self.maxservers_settings:
+            max_url = self.config.get(max_settings, 'server')
+            req = requests.get('{}/contexts'.format(max_url), headers=self.oauth2Header(self.restricted_username, self.restricted_token))
+            import ipdb;ipdb.set_trace()
 
+    def get_max_global_hashtags(self):
+        self.hashtags = []
+        for max_settings in self.maxservers_settings:
+            self.hashtags.append(self.config.get(max_settings, 'hashtag'))
+
+    def load_settings(self):
+        settings_file = '{}/.max_restricted'.format(self.config.get('general', 'config_directory'))
+        if os.path.exists(settings_file):
+            settings = json.loads(open(settings_file).read())
+        else:
+            settings = {}
+
+        if 'token' not in settings or 'username' not in settings:
+            logger.info("Unable to load MAX settings, please execute init_maxpush script.")
+            sys.exit(1)
+
+        self.restricted_username = settings.get('username')
+        self.restricted_token = settings.get('token')
+
+    def oauth2Header(self, username, token, scope="widgetcli"):
+        return {
+            "X-Oauth-Token": token,
+            "X-Oauth-Username": username,
+            "X-Oauth-Scope": scope}
 
     def run(self):
-
+        self.load_settings()
+        self.get_max_global_hashtags()
+        self.get_twitter_enabled_contexts()
         contexts_with_twitter_username = db.contexts.find({"twitterUsernameId": {"$exists": True}})
         follow_list = [users_to_follow.get('twitterUsernameId') for users_to_follow in contexts_with_twitter_username]
         contexts_with_twitter_username.rewind()

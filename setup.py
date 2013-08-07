@@ -33,6 +33,6 @@ setup(name='maxtweety',
       test_suite="maxtweety",
       entry_points="""\
       [console_scripts]
-      maxrules.twitter = maxrules.twitter:main
+      maxtweety = maxtweety:main
       """,
       )
