@@ -1,40 +1,48 @@
 from maxtweety.listener import StreamWatcherListener
 from maxtweety.utils import setup_logging
 
-import os
-import sys
 import argparse
 import ConfigParser
 import json
+import logging
+import multiprocessing
+import os
+import pika
 import requests
+import sys
 import tweepy
 
-import logging
-
-# CONFIG
-# max_server_url = 'https://max.upc.edu'
-# max_server_url = 'https://sneridagh.upc.es'
-
-# twitter_generator_name = 'Twitter'
 debug_hashtag = u'debugmaxupcnet'
-# logging_file = '/var/pyramid/maxserver/var/log/twitter-listener.log'
-# if not os.path.exists(logging_file):  # pragma: no cover
-#     logging_file = '/tmp/twitter-listener.log'
 logger = logging.getLogger(__name__)
-# fh = logging.FileHandler(logging_file, encoding="utf-8")
-# formatter = logging.Formatter('%(asctime)s %(message)s')
-# logger.setLevel(logging.DEBUG)
-# fh.setFormatter(formatter)
-# logger.addHandler(fh)
 
 
 def main(argv=sys.argv, quiet=False):  # pragma: no cover
-    # command = MaxTwitterRulesRunnerTest(argv, quiet)
-    command = MaxTwitterListenerRunner(argv, quiet)
-    return command.run()
+    tweety = MaxTwitterListenerRunner(argv, quiet)
+    tweety.spawn_process()
+
+    connection = pika.BlockingConnection(
+        pika.ConnectionParameters(
+            host=tweety.config.get('rabbitmq', 'server'))
+    )
+
+    channel = connection.channel()
+
+    logger.info('[*] Waiting for restart signal.')
+
+    def callback(ch, method, properties, body):
+        logger.info("[x] Received restart from MAX server")
+        ch.basic_ack(delivery_tag=method.delivery_tag)
+        tweety.restart()
+
+    channel.basic_qos(prefetch_count=1)
+    channel.basic_consume(callback,
+                          queue='tweety_restart')
+    channel.start_consuming()
 
 
 class MaxTwitterListenerRunner(object):  # pragma: no cover
+    process = None
+
     verbosity = 1  # required
     description = "Max Twitter listener runner."
     usage = "usage: %prog [options]"
@@ -54,6 +62,8 @@ class MaxTwitterListenerRunner(object):  # pragma: no cover
             logging.error('You must provide a valid configuration .ini file.')
             sys.exit(1)
 
+        setup_logging(self.options.configfile)
+
         try:
             self.consumer_key = self.config.get('twitter', 'consumer_key')
             self.consumer_secret = self.config.get('twitter', 'consumer_secret')
@@ -65,6 +75,15 @@ class MaxTwitterListenerRunner(object):  # pragma: no cover
         except:
             logging.error('You must provide a valid configuration .ini file.')
             sys.exit(1)
+
+    def spawn_process(self, *args, **kwargs):
+        self.process = multiprocessing.Process(target=self.run, args=args, kwargs=kwargs)
+        self.process.start()
+
+    def restart(self):
+        if self.process.is_alive():
+            self.process.terminate()
+            self.spawn_process()
 
     def get_twitter_enabled_contexts(self):
         contexts = {}
@@ -99,7 +118,7 @@ class MaxTwitterListenerRunner(object):  # pragma: no cover
             settings = {}
 
         if 'token' not in settings or 'username' not in settings:
-            logger.info("Unable to load MAX settings, please execute init_maxpush script.")
+            logger.info("Unable to load MAX settings, please execute initialization script.")
             sys.exit(1)
 
         self.restricted_username = settings.get('username')
@@ -112,7 +131,6 @@ class MaxTwitterListenerRunner(object):  # pragma: no cover
             "X-Oauth-Scope": scope}
 
     def run(self):
-        setup_logging(self.options.configfile)
         self.load_settings()
         self.get_max_global_hashtags()
         self.get_twitter_enabled_contexts()
@@ -127,40 +145,7 @@ class MaxTwitterListenerRunner(object):  # pragma: no cover
         # Add the debug hashtag
         self.global_hashtags.append(debug_hashtag)
 
-        logging.warning("Listening to this Twitter hashtags: \n{}".format(json.dumps(self.global_hashtags, indent=4, sort_keys=True)))
-        logging.warning("Listening to this Twitter userIds: \n{}".format(json.dumps(self.users_id_to_follow, indent=4, sort_keys=True)))
+        logger.info("Listening to this Twitter hashtags: \n{}".format(json.dumps(self.global_hashtags, indent=4, sort_keys=True)))
+        logger.info("Listening to this Twitter userIds: \n{}".format(json.dumps(self.users_id_to_follow, indent=4, sort_keys=True)))
 
         stream.filter(follow=self.flatten_users_id_to_follow(), track=self.global_hashtags)
-
-
-# For testing purposes only
-class MaxTwitterRulesRunnerTest(object):  # pragma: no cover
-    verbosity = 1  # required
-    description = "Max rules runner."
-    usage = "usage: %prog [options]"
-    parser = argparse.ArgumentParser(usage, description=description)
-    parser.add_argument('-c', '--config',
-                      dest='configfile',
-                      type=str,
-                      help=("Configuration file"))
-
-    def __init__(self, argv, quiet=False):
-        self.quiet = quiet
-        self.options = self.parser.parse_args()
-
-        logging.warning("Running first time!")
-
-    def run(self):
-        while True:
-            import time
-            time.sleep(2)
-            from maxrules.tasks import processTweet
-            processTweet('sneridagh', u'Twitejant com un usuari de twitter assignat a un contexte')
-            time.sleep(2)
-            processTweet('maxupcnet', u'Twitejant amb el hashtag #upc #gsxf')
-
-if __name__ == '__main__':  # pragma: no cover
-    try:
-        main()
-    except KeyboardInterrupt:
-        logging.warning('\nGoodbye!')
