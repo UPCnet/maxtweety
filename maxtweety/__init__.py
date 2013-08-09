@@ -89,7 +89,7 @@ class MaxTwitterListenerRunner(object):  # pragma: no cover
         contexts = {}
         for max_settings in self.maxservers_settings:
             max_url = self.config.get(max_settings, 'server')
-            req = requests.get('{}/contexts'.format(max_url), headers=self.oauth2Header(self.restricted_username, self.restricted_token))
+            req = requests.get('{}/contexts'.format(max_url), params={"twitter_enabled": True}, headers=self.oauth2Header(self.restricted_username, self.restricted_token))
             context_follow_list = [users_to_follow.get('twitterUsernameId') for users_to_follow in req.json().get('items') if users_to_follow.get('twitterUsernameId')]
             context_readable_follow_list = [users_to_follow.get('twitterUsername') for users_to_follow in req.json().get('items') if users_to_follow.get('twitterUsername')]
             contexts.setdefault(max_settings, {})['ids'] = context_follow_list
