@@ -13,7 +13,7 @@ import sys
 import tweepy
 
 debug_hashtag = u'debugmaxupcnet'
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('tweety')
 
 
 def main(argv=sys.argv, quiet=False):  # pragma: no cover
@@ -89,9 +89,9 @@ class MaxTwitterListenerRunner(object):  # pragma: no cover
         contexts = {}
         for max_settings in self.maxservers_settings:
             max_url = self.config.get(max_settings, 'server')
-            req = requests.get('{}/contexts'.format(max_url), params={"twitter_enabled": True}, headers=self.oauth2Header(self.restricted_username, self.restricted_token))
-            context_follow_list = [users_to_follow.get('twitterUsernameId') for users_to_follow in req.json().get('items') if users_to_follow.get('twitterUsernameId')]
-            context_readable_follow_list = [users_to_follow.get('twitterUsername') for users_to_follow in req.json().get('items') if users_to_follow.get('twitterUsername')]
+            req = requests.get('{}/contexts'.format(max_url), params={"twitter_enabled": True}, headers=self.oauth2Header(self.restricted_users[max_settings]['username'], self.restricted_users[max_settings]['token']))
+            context_follow_list = [users_to_follow.get('twitterUsernameId') for users_to_follow in req.json() if users_to_follow.get('twitterUsernameId')]
+            context_readable_follow_list = [users_to_follow.get('twitterUsername') for users_to_follow in req.json() if users_to_follow.get('twitterUsername')]
             contexts.setdefault(max_settings, {})['ids'] = context_follow_list
             contexts[max_settings]['readable'] = context_readable_follow_list
 
@@ -110,19 +110,22 @@ class MaxTwitterListenerRunner(object):  # pragma: no cover
         for max_settings in self.maxservers_settings:
             self.global_hashtags.append(self.config.get(max_settings, 'hashtag'))
 
-    def load_settings(self):
-        settings_file = '{}/.max_restricted'.format(self.config.get('general', 'config_directory'))
-        if os.path.exists(settings_file):
-            settings = json.loads(open(settings_file).read())
-        else:
-            settings = {}
+    def load_restricted_users(self):
+        self.restricted_users = {}
+        for max_settings in self.maxservers_settings:
+            settings_file = '{}/.max_restricted'.format(self.config.get(max_settings, 'config_directory'))
 
-        if 'token' not in settings or 'username' not in settings:
-            logger.info("Unable to load MAX settings, please execute initialization script.")
-            sys.exit(1)
+            if os.path.exists(settings_file):
+                settings = json.loads(open(settings_file).read())
+            else:
+                settings = {}
 
-        self.restricted_username = settings.get('username')
-        self.restricted_token = settings.get('token')
+            if 'token' not in settings or 'username' not in settings:
+                logger.info("Unable to load MAX settings, please execute initialization script for MAX server {}.".format(self.config.get(max_settings, 'server')))
+                sys.exit(1)
+
+            self.restricted_users.setdefault(max_settings, {})['username'] = settings.get('username')
+            self.restricted_users.setdefault(max_settings, {})['token'] = settings.get('token')
 
     def oauth2Header(self, username, token, scope="widgetcli"):
         return {
@@ -131,7 +134,7 @@ class MaxTwitterListenerRunner(object):  # pragma: no cover
             "X-Oauth-Scope": scope}
 
     def run(self):
-        self.load_settings()
+        self.load_restricted_users()
         self.get_max_global_hashtags()
         self.get_twitter_enabled_contexts()
 
