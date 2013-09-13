@@ -21,8 +21,7 @@ def main(argv=sys.argv, quiet=False):  # pragma: no cover
     tweety.spawn_process()
 
     connection = pika.BlockingConnection(
-        pika.ConnectionParameters(
-            host=tweety.config.get('rabbitmq', 'server'))
+        pika.URLParameters(tweety.config.get('rabbitmq', 'server'))
     )
 
     channel = connection.channel()

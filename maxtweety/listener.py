@@ -19,9 +19,7 @@ class StreamWatcherListener(tweepy.StreamListener):  # pragma: no cover
     def on_status(self, status):
         # Initialize Rabbit connection
         self.connection = pika.BlockingConnection(
-            pika.ConnectionParameters(
-                host=self.rabbit_server
-            )
+            pika.URLParameters(self.rabbit_server)
         )
         self.channel = self.connection.channel()
 
