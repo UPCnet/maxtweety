@@ -9,7 +9,8 @@ CHANGES = open(os.path.join(here, 'CHANGES.rst')).read()
 requires = [
     'pika',
     'tweepy',
-    'multiprocessing'
+    'multiprocessing',
+    'arrow'
 ]
 
 setup(name='maxtweety',

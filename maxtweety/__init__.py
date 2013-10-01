@@ -11,12 +11,51 @@ import pika
 import requests
 import sys
 import tweepy
+import arrow
+import time
+import datetime
 
 debug_hashtag = u'debugmaxupcnet'
 logger = logging.getLogger('tweety')
 
 
+class RestartClock(object):
+    def __init__(self, seconds_between_restarts=10):
+        self.reset()
+        self.delay = seconds_between_restarts
+
+    def reset(self):
+        """
+            Resets the timer to the current time
+        """
+        self.last = arrow.now()
+
+    def ready(self):
+        """
+            Returns True if enough time has elapsed since last reset
+        """
+        elapsed = arrow.now() - self.last
+        elapsed_seconds = elapsed.seconds
+        return elapsed_seconds >= self.delay
+
+    def remaining(self):
+        """
+            Time remaining to be ready again
+        """
+        elapsed = arrow.now() - self.last
+        elapsed_seconds = elapsed.seconds
+        time_to_wait = self.delay - elapsed_seconds
+        return time_to_wait
+
+    def wait(self):
+        time.sleep(self.remaining())
+
+    def in_time(self, restart_request):
+        return restart_request is None or restart_request > self.last
+
+
 def main(argv=sys.argv, quiet=False):  # pragma: no cover
+    clock = RestartClock()
     tweety = MaxTwitterListenerRunner(argv, quiet)
     tweety.spawn_process()
 
@@ -29,9 +68,23 @@ def main(argv=sys.argv, quiet=False):  # pragma: no cover
     logger.info('[*] Waiting for restart signal.')
 
     def callback(ch, method, properties, body):
+
         logger.info("[x] Received restart from MAX server")
+        try:
+            restart_request_time = arrow.get(datetime.datetime.utcfromtimestamp(float(body)))
+        except:
+            restart_request_time = None
         ch.basic_ack(delivery_tag=method.delivery_tag)
-        tweety.restart()
+
+        if clock.in_time(restart_request_time):
+            if not clock.ready():
+                logger.info("[x] Delaying restart {} seconds".format(clock.remaining()))
+                clock.wait()
+            tweety.restart()
+            logger.info("[x] Restarted")
+            clock.reset()
+        else:
+            logger.info("[x] Discarding restart")
 
     channel.basic_qos(prefetch_count=1)
     channel.basic_consume(callback,
