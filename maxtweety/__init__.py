@@ -6,7 +6,6 @@ import ConfigParser
 import json
 import logging
 import multiprocessing
-import os
 import pika
 import requests
 import sys
@@ -60,7 +59,7 @@ def main(argv=sys.argv, quiet=False):  # pragma: no cover
     tweety.spawn_process()
 
     connection = pika.BlockingConnection(
-        pika.URLParameters(tweety.config.get('rabbitmq', 'server'))
+        pika.URLParameters(tweety.common.get('rabbitmq', 'server'))
     )
 
     channel = connection.channel()
@@ -69,7 +68,7 @@ def main(argv=sys.argv, quiet=False):  # pragma: no cover
 
     def callback(ch, method, properties, body):
 
-        logger.info("[x] Received restart from MAX server")
+        logger.info("[*] Received restart from MAX server")
         try:
             restart_request_time = arrow.get(datetime.datetime.utcfromtimestamp(float(body)))
         except:
@@ -78,13 +77,13 @@ def main(argv=sys.argv, quiet=False):  # pragma: no cover
 
         if clock.in_time(restart_request_time):
             if not clock.ready():
-                logger.info("[x] Delaying restart {} seconds".format(clock.remaining()))
+                logger.info("[*] Delaying restart {} seconds".format(clock.remaining()))
                 clock.wait()
             tweety.restart()
-            logger.info("[x] Restarted")
+            logger.info("[*] Restarted")
             clock.reset()
         else:
-            logger.info("[x] Discarding restart")
+            logger.info("[*] Discarding restart")
 
     channel.basic_qos(prefetch_count=1)
     channel.basic_consume(callback,
@@ -99,10 +98,11 @@ class MaxTwitterListenerRunner(object):  # pragma: no cover
     description = "Max Twitter listener runner."
     usage = "usage: %prog [options]"
     parser = argparse.ArgumentParser(description=description)
-    parser.add_argument('-c', '--config',
-                      dest='configfile',
-                      type=str,
-                      help=("Configuration file"))
+    parser.add_argument(
+        '-c', '--config',
+        dest='configfile',
+        type=str,
+        help=("Configuration file"))
 
     def __init__(self, argv, quiet=False):
         self.quiet = quiet
@@ -116,13 +116,26 @@ class MaxTwitterListenerRunner(object):  # pragma: no cover
 
         setup_logging(self.options.configfile)
 
-        try:
-            self.consumer_key = self.config.get('twitter', 'consumer_key')
-            self.consumer_secret = self.config.get('twitter', 'consumer_secret')
-            self.access_token = self.config.get('twitter', 'access_token')
-            self.access_token_secret = self.config.get('twitter', 'access_token_secret')
+        common_config_file = self.config.get('main', 'common')
+        cloudapis_config_file = self.config.get('main', 'cloudapis')
+        instances_config_file = self.config.get('main', 'instances')
 
-            self.maxservers_settings = [maxserver for maxserver in self.config.sections() if maxserver.startswith('max_')]
+        self.common = ConfigParser.ConfigParser()
+        self.common.read(common_config_file)
+
+        self.cloudapis = ConfigParser.ConfigParser()
+        self.cloudapis.read(cloudapis_config_file)
+
+        self.instances = ConfigParser.ConfigParser()
+        self.instances.read(instances_config_file)
+
+        try:
+            self.consumer_key = self.cloudapis.get('twitter', 'consumer_key')
+            self.consumer_secret = self.cloudapis.get('twitter', 'consumer_secret')
+            self.access_token = self.cloudapis.get('twitter', 'access_token')
+            self.access_token_secret = self.cloudapis.get('twitter', 'access_token_secret')
+
+            self.maxservers_settings = [maxserver for maxserver in self.instances.sections() if maxserver.startswith('max_')]
 
         except:
             logging.error('You must provide a valid configuration .ini file.')
@@ -140,8 +153,10 @@ class MaxTwitterListenerRunner(object):  # pragma: no cover
     def get_twitter_enabled_contexts(self):
         contexts = {}
         for max_settings in self.maxservers_settings:
-            max_url = self.config.get(max_settings, 'server')
-            req = requests.get('{}/contexts'.format(max_url), params={"twitter_enabled": True}, headers=self.oauth2Header(self.restricted_users[max_settings]['username'], self.restricted_users[max_settings]['token']))
+            max_url = self.instances.get(max_settings, 'server')
+            max_restricted_user = self.instances.get(max_settings, 'restricted_user')
+            max_restricted_user_token = self.instances.get(max_settings, 'restricted_user_token')
+            req = requests.get('{}/contexts'.format(max_url), params={"twitter_enabled": True}, headers=self.oauth2Header(max_restricted_user, max_restricted_user_token))
             context_follow_list = [users_to_follow.get('twitterUsernameId') for users_to_follow in req.json() if users_to_follow.get('twitterUsernameId')]
             context_readable_follow_list = [users_to_follow.get('twitterUsername') for users_to_follow in req.json() if users_to_follow.get('twitterUsername')]
             contexts.setdefault(max_settings, {})['ids'] = context_follow_list
@@ -160,24 +175,7 @@ class MaxTwitterListenerRunner(object):  # pragma: no cover
     def get_max_global_hashtags(self):
         self.global_hashtags = []
         for max_settings in self.maxservers_settings:
-            self.global_hashtags.append(self.config.get(max_settings, 'hashtag'))
-
-    def load_restricted_users(self):
-        self.restricted_users = {}
-        for max_settings in self.maxservers_settings:
-            settings_file = '{}/.max_restricted'.format(self.config.get(max_settings, 'config_directory'))
-
-            if os.path.exists(settings_file):
-                settings = json.loads(open(settings_file).read())
-            else:
-                settings = {}
-
-            if 'token' not in settings or 'username' not in settings:
-                logger.info("Unable to load MAX settings, please execute initialization script for MAX server {}.".format(self.config.get(max_settings, 'server')))
-                sys.exit(1)
-
-            self.restricted_users.setdefault(max_settings, {})['username'] = settings.get('username')
-            self.restricted_users.setdefault(max_settings, {})['token'] = settings.get('token')
+            self.global_hashtags.append(self.instances.get(max_settings, 'hashtag'))
 
     def oauth2Header(self, username, token, scope="widgetcli"):
         return {
@@ -186,7 +184,6 @@ class MaxTwitterListenerRunner(object):  # pragma: no cover
             "X-Oauth-Scope": scope}
 
     def run(self):
-        self.load_restricted_users()
         self.get_max_global_hashtags()
         self.get_twitter_enabled_contexts()
 
@@ -195,7 +192,7 @@ class MaxTwitterListenerRunner(object):  # pragma: no cover
         auth.set_access_token(self.access_token, self.access_token_secret)
 
         # auth = tweepy.auth.BasicAuthHandler(self.options.username, self.options.password)
-        stream = tweepy.Stream(auth, StreamWatcherListener(self.config.get('rabbitmq', 'server')), timeout=None)
+        stream = tweepy.Stream(auth, StreamWatcherListener(self.common.get('rabbitmq', 'server')), timeout=None)
 
         # Add the debug hashtag
         self.global_hashtags.append(debug_hashtag)

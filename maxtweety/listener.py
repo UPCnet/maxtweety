@@ -5,7 +5,7 @@ import logging
 import pika
 import tweepy
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('twitterlistener')
 
 
 class StreamWatcherListener(tweepy.StreamListener):  # pragma: no cover
