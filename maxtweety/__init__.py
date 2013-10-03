@@ -203,11 +203,11 @@ class MaxTwitterListenerRunner(object):  # pragma: no cover
         auth.set_access_token(self.access_token, self.access_token_secret)
 
         # auth = tweepy.auth.BasicAuthHandler(self.options.username, self.options.password)
-        #stream = tweepy.Stream(auth, StreamWatcherListener(self.common.get('rabbitmq', 'server')), timeout=None)
+        stream = tweepy.Stream(auth, StreamWatcherListener(self.common.get('rabbitmq', 'server')), timeout=None)
 
         # Add the debug hashtag
-        #self.global_hashtags.append(debug_hashtag)
+        self.global_hashtags.append(debug_hashtag)
 
-        #logger.info("Listening to this Twitter hashtags: \n{}".format(json.dumps(self.global_hashtags, indent=4, sort_keys=True)))
-        #logger.info("Listening to this Twitter userIds: \n{}".format(json.dumps(self.users_id_to_follow, indent=4, sort_keys=True)))
-        #stream.filter(follow=self.flatten_users_id_to_follow(), track=self.global_hashtags)
+        logger.info("Listening to this Twitter hashtags: \n{}".format(json.dumps(self.global_hashtags, indent=4, sort_keys=True)))
+        logger.info("Listening to this Twitter userIds: \n{}".format(json.dumps(self.users_id_to_follow, indent=4, sort_keys=True)))
+        stream.filter(follow=self.flatten_users_id_to_follow(), track=self.global_hashtags)
