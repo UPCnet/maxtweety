@@ -1,6 +1,12 @@
 Changelog
 =========
 
+1.2 (unreleased)
+----------------
+
+- Nothing changed yet.
+
+
 1.1 (2013-10-03)
 ----------------
  * Parametrize the delay restart time [Carles Bruguera]
