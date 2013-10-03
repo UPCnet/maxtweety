@@ -1,10 +1,10 @@
 Changelog
 =========
 
-1.2 (unreleased)
-----------------
+1.1.1 (2013-10-03)
+------------------
 
-- Nothing changed yet.
+ * Re-enable stream listener [Carles Bruguera]
 
 
 1.1 (2013-10-03)
