@@ -14,7 +14,7 @@ import arrow
 import time
 import datetime
 
-debug_hashtag = u'debugmaxupcnet'
+debug_hashtag = u'#debugmaxupcnet'
 logger = logging.getLogger('tweety')
 
 
@@ -175,7 +175,7 @@ class MaxTwitterListenerRunner(object):  # pragma: no cover
     def get_max_global_hashtags(self):
         self.global_hashtags = []
         for max_settings in self.maxservers_settings:
-            self.global_hashtags.append(self.instances.get(max_settings, 'hashtag'))
+            self.global_hashtags.append('#{}'.format(self.instances.get(max_settings, 'hashtag')))
 
     def oauth2Header(self, username, token, scope="widgetcli"):
         return {
@@ -199,5 +199,4 @@ class MaxTwitterListenerRunner(object):  # pragma: no cover
 
         logger.info("Listening to this Twitter hashtags: \n{}".format(json.dumps(self.global_hashtags, indent=4, sort_keys=True)))
         logger.info("Listening to this Twitter userIds: \n{}".format(json.dumps(self.users_id_to_follow, indent=4, sort_keys=True)))
-
         stream.filter(follow=self.flatten_users_id_to_follow(), track=self.global_hashtags)
