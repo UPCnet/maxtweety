@@ -19,7 +19,7 @@ logger = logging.getLogger('tweety')
 
 
 class RestartClock(object):
-    def __init__(self, seconds_between_restarts=10):
+    def __init__(self, seconds_between_restarts=20):
         self.reset()
         self.delay = seconds_between_restarts
 
@@ -54,7 +54,6 @@ class RestartClock(object):
 
 
 def main(argv=sys.argv, quiet=False):  # pragma: no cover
-    clock = RestartClock()
     tweety = MaxTwitterListenerRunner(argv, quiet)
     tweety.spawn_process()
 
@@ -66,9 +65,16 @@ def main(argv=sys.argv, quiet=False):  # pragma: no cover
 
     logger.info('[*] Waiting for restart signal.')
 
+    try:
+        restart_delay = int(tweety.config.get('main', 'minimum_restart_delay'))
+    except:
+        restart_delay = 300
+
+    clock = RestartClock(seconds_between_restarts=restart_delay)
+
     def callback(ch, method, properties, body):
 
-        logger.info("[*] Received restart from MAX server")
+        received_restart_msg = "[*] Received restart from MAX Server -->"
         try:
             restart_request_time = arrow.get(datetime.datetime.utcfromtimestamp(float(body)))
         except:
@@ -77,13 +83,15 @@ def main(argv=sys.argv, quiet=False):  # pragma: no cover
 
         if clock.in_time(restart_request_time):
             if not clock.ready():
-                logger.info("[*] Delaying restart {} seconds".format(clock.remaining()))
+                remaining = clock.remaining()
+                next_restart = arrow.now().replace(seconds=remaining).strftime('%H:%M:%S')
+                logger.info("{} Delayed until {}".format(received_restart_msg, next_restart))
                 clock.wait()
             tweety.restart()
-            logger.info("[*] Restarted")
+            logger.info("{} Restarted".format(received_restart_msg))
             clock.reset()
         else:
-            logger.info("[*] Discarding restart")
+            logger.info("{} Discarding ancient restart".format(received_restart_msg))
 
     channel.basic_qos(prefetch_count=1)
     channel.basic_consume(callback,
@@ -157,10 +165,13 @@ class MaxTwitterListenerRunner(object):  # pragma: no cover
             max_restricted_user = self.instances.get(max_settings, 'restricted_user')
             max_restricted_user_token = self.instances.get(max_settings, 'restricted_user_token')
             req = requests.get('{}/contexts'.format(max_url), params={"twitter_enabled": True}, headers=self.oauth2Header(max_restricted_user, max_restricted_user_token))
-            context_follow_list = [users_to_follow.get('twitterUsernameId') for users_to_follow in req.json() if users_to_follow.get('twitterUsernameId')]
-            context_readable_follow_list = [users_to_follow.get('twitterUsername') for users_to_follow in req.json() if users_to_follow.get('twitterUsername')]
-            contexts.setdefault(max_settings, {})['ids'] = context_follow_list
-            contexts[max_settings]['readable'] = context_readable_follow_list
+            if req.status_code == 200:
+                context_follow_list = [users_to_follow.get('twitterUsernameId') for users_to_follow in req.json() if users_to_follow.get('twitterUsernameId')]
+                context_readable_follow_list = [users_to_follow.get('twitterUsername') for users_to_follow in req.json() if users_to_follow.get('twitterUsername')]
+                contexts.setdefault(max_settings, {})['ids'] = context_follow_list
+                contexts[max_settings]['readable'] = context_readable_follow_list
+            else:
+                logging.error('Failed to get contexts from "{}" at {}'.format(max_settings, max_url))
 
         self.users_id_to_follow = contexts
 
@@ -192,11 +203,11 @@ class MaxTwitterListenerRunner(object):  # pragma: no cover
         auth.set_access_token(self.access_token, self.access_token_secret)
 
         # auth = tweepy.auth.BasicAuthHandler(self.options.username, self.options.password)
-        stream = tweepy.Stream(auth, StreamWatcherListener(self.common.get('rabbitmq', 'server')), timeout=None)
+        #stream = tweepy.Stream(auth, StreamWatcherListener(self.common.get('rabbitmq', 'server')), timeout=None)
 
         # Add the debug hashtag
-        self.global_hashtags.append(debug_hashtag)
+        #self.global_hashtags.append(debug_hashtag)
 
-        logger.info("Listening to this Twitter hashtags: \n{}".format(json.dumps(self.global_hashtags, indent=4, sort_keys=True)))
-        logger.info("Listening to this Twitter userIds: \n{}".format(json.dumps(self.users_id_to_follow, indent=4, sort_keys=True)))
-        stream.filter(follow=self.flatten_users_id_to_follow(), track=self.global_hashtags)
+        #logger.info("Listening to this Twitter hashtags: \n{}".format(json.dumps(self.global_hashtags, indent=4, sort_keys=True)))
+        #logger.info("Listening to this Twitter userIds: \n{}".format(json.dumps(self.users_id_to_follow, indent=4, sort_keys=True)))
+        #stream.filter(follow=self.flatten_users_id_to_follow(), track=self.global_hashtags)
