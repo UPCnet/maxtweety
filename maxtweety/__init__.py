@@ -164,7 +164,7 @@ class MaxTwitterListenerRunner(object):  # pragma: no cover
             max_url = self.instances.get(max_settings, 'server')
             max_restricted_user = self.instances.get(max_settings, 'restricted_user')
             max_restricted_user_token = self.instances.get(max_settings, 'restricted_user_token')
-            req = requests.get('{}/contexts'.format(max_url), params={"twitter_enabled": True}, headers=self.oauth2Header(max_restricted_user, max_restricted_user_token))
+            req = requests.get('{}/contexts'.format(max_url), params={"twitter_enabled": True, "limit": 0}, headers=self.oauth2Header(max_restricted_user, max_restricted_user_token))
             if req.status_code == 200:
                 context_follow_list = [users_to_follow.get('twitterUsernameId') for users_to_follow in req.json() if users_to_follow.get('twitterUsernameId')]
                 context_readable_follow_list = [users_to_follow.get('twitterUsername') for users_to_follow in req.json() if users_to_follow.get('twitterUsername')]
@@ -208,6 +208,6 @@ class MaxTwitterListenerRunner(object):  # pragma: no cover
         # Add the debug hashtag
         self.global_hashtags.append(debug_hashtag)
 
-        logger.info("Listening to this Twitter hashtags: \n{}".format(json.dumps(self.global_hashtags, indent=4, sort_keys=True)))
-        logger.info("Listening to this Twitter userIds: \n{}".format(json.dumps(self.users_id_to_follow, indent=4, sort_keys=True)))
+        logger.info("Listening to this Twitter hashtags: {}".format(', '.join(self.global_hashtags)))
+        logger.info("Listening to this Twitter users: \n{}".format(json.dumps(dict([(k, ['{:<15} ({})'.format(*a) for a in zip(v['readable'], v['ids'])]) for k, v in self.users_id_to_follow.items()]), indent=4)))
         stream.filter(follow=self.flatten_users_id_to_follow(), track=self.global_hashtags)
