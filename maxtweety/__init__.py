@@ -156,7 +156,18 @@ class MaxTwitterListenerRunner(object):  # pragma: no cover
     def restart(self):
         if self.process.is_alive():
             self.process.terminate()
-            self.spawn_process()
+        self.spawn_process()
+
+    def send_restart(self):
+        connection = pika.BlockingConnection(
+            pika.URLParameters(self.rabbit_server)
+        )
+        channel = connection.channel()
+        restart_request_time = datetime.datetime.now().strftime('%s.%f')
+        channel.basic_publish(
+            exchange='',
+            routing_key='tweety_restart',
+            body=restart_request_time)
 
     def get_twitter_enabled_contexts(self):
         contexts = {}
@@ -203,11 +214,18 @@ class MaxTwitterListenerRunner(object):  # pragma: no cover
         auth.set_access_token(self.access_token, self.access_token_secret)
 
         # auth = tweepy.auth.BasicAuthHandler(self.options.username, self.options.password)
-        stream = tweepy.Stream(auth, StreamWatcherListener(self.common.get('rabbitmq', 'server')), timeout=None)
+        self.rabbit_server = self.common.get('rabbitmq', 'server')
+        stream = tweepy.Stream(auth, StreamWatcherListener(self.rabbit_server), timeout=None)
 
         # Add the debug hashtag
         self.global_hashtags.append(debug_hashtag)
 
         logger.info("Listening to this Twitter hashtags: {}".format(', '.join(self.global_hashtags)))
         logger.info("Listening to this Twitter users: \n{}".format(json.dumps(dict([(k, ['{:<15} ({})'.format(*a) for a in zip(v['readable'], v['ids'])]) for k, v in self.users_id_to_follow.items()]), indent=4)))
-        stream.filter(follow=self.flatten_users_id_to_follow(), track=self.global_hashtags)
+
+        try:
+            stream.filter(follow=self.flatten_users_id_to_follow(), track=self.global_hashtags)
+        except:
+            logger.info('Stream listener unexpectedly exited, sending auto-restart signal.')
+            self.send_restart()
+        return
