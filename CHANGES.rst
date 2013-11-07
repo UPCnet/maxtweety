@@ -1,11 +1,10 @@
 Changelog
 =========
 
-1.1.3 (unreleased)
+1.1.3 (2013-11-07)
 ------------------
 
-- Nothing changed yet.
-
+* Auto-restart process on tweepy crash [Carles Bruguera]
 
 1.1.2 (2013-10-17)
 ------------------
