@@ -10,7 +10,8 @@ requires = [
     'pika',
     'tweepy',
     'multiprocessing',
-    'arrow'
+    'arrow',
+    'maxcarrot'
 ]
 
 setup(name='maxtweety',

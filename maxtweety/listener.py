@@ -5,6 +5,8 @@ import logging
 import pika
 import tweepy
 
+from maxcarrot.message import RabbitMessage
+
 logger = logging.getLogger('twitterlistener')
 
 
@@ -26,15 +28,23 @@ class StreamWatcherListener(tweepy.StreamListener):  # pragma: no cover
         try:
             logger.info('Got tweet %d from %s via %s with content: %s' % (status.id, status.author.screen_name, status.source, status.text))
             # Insert the data of the new tweet into the Rabbit queue
-            message = dict(author=status.author.screen_name.lower(), message=status.text, stid=status.id)
+            twitter_message = dict(author=status.author.screen_name.lower(), message=status.text, stid=status.id)
+
+            message = RabbitMessage()
+            message.prepare({
+                "source": "tweety",
+                "version": 4.0,
+            })
+            message['data'] = twitter_message
+            message['object'] = 'tweet'
+            message['action'] = 'add'
+
             self.channel.basic_publish(
                 exchange='twitter',
                 routing_key='',
-                body=json.dumps(message)
+                body=json.dumps(message.packed)
             )
             self.connection.close()
-            # from maxrules.tasks import processTweet
-            # processTweet.delay(status.author.screen_name.lower(), status.text, status.id)
         except:
             # Catch any unicode errors while printing to console
             # and just ignore them to avoid breaking application.
