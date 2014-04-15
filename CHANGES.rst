@@ -1,11 +1,11 @@
 Changelog
 =========
 
-1.1.4 (unreleased)
+4.0.0 (2014-04-15)
 ------------------
 
-- Nothing changed yet.
-
+* Adapt maxtweety to new rabbitmq architecture [Carles Bruguera]
+* Depend on maxcarrot for messages [Carles Bruguera]
 
 1.1.3 (2013-11-07)
 ------------------
