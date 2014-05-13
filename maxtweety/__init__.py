@@ -197,7 +197,10 @@ class MaxTwitterListenerRunner(object):  # pragma: no cover
     def get_max_global_hashtags(self):
         self.global_hashtags = []
         for max_settings in self.maxservers_settings:
-            self.global_hashtags.append('#{}'.format(self.instances.get(max_settings, 'hashtag')))
+            hashtag = self.instances.get(max_settings, 'hashtag').strip('')
+            # Don't listen to empty hashtags
+            if hashtag:
+                self.global_hashtags.append('#{}'.format(hashtag))
 
     def oauth2Header(self, username, token, scope="widgetcli"):
         return {
