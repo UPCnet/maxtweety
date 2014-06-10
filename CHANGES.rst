@@ -1,11 +1,10 @@
 Changelog
 =========
 
-4.0.1 (unreleased)
+4.0.1 (2014-06-10)
 ------------------
 
-- Nothing changed yet.
-
+* Don't listen to empty hashtags [Carles Bruguera]
 
 4.0.0 (2014-04-15)
 ------------------
