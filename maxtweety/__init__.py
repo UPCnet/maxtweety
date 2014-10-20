@@ -8,6 +8,7 @@ import logging
 import multiprocessing
 import pika
 import requests
+import pkg_resources
 import sys
 import tweepy
 import arrow
@@ -16,6 +17,30 @@ import datetime
 
 debug_hashtag = u'#debugmaxupcnet'
 logger = logging.getLogger('tweety')
+
+
+# PATCH Pika to provide extended client_properties to Rabbitmq Management plugin
+
+@property
+def _client_properties(self):
+    """Return the client properties dictionary.
+
+    :rtype: dict
+
+    """
+    return {'library': pika.connection.PRODUCT,
+            'library-version': pkg_resources.require('pika')[0].version,
+            'capabilities': {'authentication_failure_close': True,
+                             'basic.nack': True,
+                             'connection.blocked': True,
+                             'consumer_cancel_notify': True,
+                             'publisher_confirms': True},
+            'information': 'See http://pika.rtfd.org',
+            'platform': 'Python {0.major}.{0.minor}.{0.micro}'.format(sys.version_info),
+            'product': 'maxtweety',
+            'version': pkg_resources.require('maxtweety')[0].version}
+
+pika.connection.Connection._client_properties = _client_properties
 
 
 class RestartClock(object):
