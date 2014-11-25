@@ -1,11 +1,10 @@
 Changelog
 =========
 
-4.0.2 (unreleased)
+4.0.2 (2014-11-25)
 ------------------
 
-- Nothing changed yet.
-
+* Provide custom client_properties to pika [Carles Bruguera]
 
 4.0.1 (2014-06-10)
 ------------------
