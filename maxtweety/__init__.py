@@ -168,7 +168,7 @@ class MaxTwitterListenerRunner(object):  # pragma: no cover
             self.access_token = self.cloudapis.get('twitter', 'access_token')
             self.access_token_secret = self.cloudapis.get('twitter', 'access_token_secret')
 
-            self.maxservers_settings = [maxserver for maxserver in self.instances.sections() if maxserver.startswith('max_')]
+            self.maxservers_settings = [maxserver for maxserver in self.instances.sections()]
 
         except:
             logging.error('You must provide a valid configuration .ini file.')
@@ -196,33 +196,33 @@ class MaxTwitterListenerRunner(object):  # pragma: no cover
 
     def get_twitter_enabled_contexts(self):
         contexts = {}
-        for max_settings in self.maxservers_settings:
-            max_url = self.instances.get(max_settings, 'server')
-            max_restricted_user = self.instances.get(max_settings, 'restricted_user')
-            max_restricted_user_token = self.instances.get(max_settings, 'restricted_user_token')
+        for max_server_name in self.maxservers_settings:
+            max_url = self.instances.get(max_server_name, 'server')
+            max_restricted_user = self.instances.get(max_server_name, 'restricted_user')
+            max_restricted_user_token = self.instances.get(max_server_name, 'restricted_user_token')
             req = requests.get('{}/contexts'.format(max_url), params={"twitter_enabled": True, "limit": 0}, headers=self.oauth2Header(max_restricted_user, max_restricted_user_token))
             if req.status_code == 200:
                 context_follow_list = [users_to_follow.get('twitterUsernameId') for users_to_follow in req.json() if users_to_follow.get('twitterUsernameId')]
                 context_readable_follow_list = [users_to_follow.get('twitterUsername') for users_to_follow in req.json() if users_to_follow.get('twitterUsername')]
-                contexts.setdefault(max_settings, {})['ids'] = context_follow_list
-                contexts[max_settings]['readable'] = context_readable_follow_list
+                contexts.setdefault(max_server_name, {})['ids'] = context_follow_list
+                contexts[max_server_name]['readable'] = context_readable_follow_list
             else:
-                logging.error('Failed to get contexts from "{}" at {}'.format(max_settings, max_url))
+                logging.error('Failed to get contexts from "{}" at {}: {}'.format(max_server_name, max_url, req.content))
 
         self.users_id_to_follow = contexts
 
     def flatten_users_id_to_follow(self):
         flat_list = []
-        for maxserver in self.users_id_to_follow.keys():
-            id_list = self.users_id_to_follow.get(maxserver).get('ids')
+        for maxserver_name in self.users_id_to_follow.keys():
+            id_list = self.users_id_to_follow.get(maxserver_name).get('ids')
             flat_list = flat_list + id_list
 
         return flat_list
 
     def get_max_global_hashtags(self):
         self.global_hashtags = []
-        for max_settings in self.maxservers_settings:
-            hashtag = self.instances.get(max_settings, 'hashtag').strip('')
+        for max_server_name in self.maxservers_settings:
+            hashtag = self.instances.get(max_server_name, 'hashtag', '').strip('')
             # Don't listen to empty hashtags
             if hashtag:
                 self.global_hashtags.append('#{}'.format(hashtag))
