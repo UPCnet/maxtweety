@@ -1,11 +1,10 @@
 Changelog
 =========
 
-4.0.3 (unreleased)
+4.0.3 (2014-12-01)
 ------------------
 
-- Nothing changed yet.
-
+* Updat to new instances.ini format [Carles Bruguera]
 
 4.0.2 (2014-11-25)
 ------------------
