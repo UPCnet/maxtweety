@@ -17,7 +17,7 @@ requires = [
 ]
 
 setup(name='maxtweety',
-      version='4.0.4',
+      version='4.0.5.dev0',
       description='maxtweety',
       long_description=README + '\n\n' + CHANGES,
       classifiers=[
